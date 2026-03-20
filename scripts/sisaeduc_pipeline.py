@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date, datetime
 from difflib import SequenceMatcher
 import re
 import unicodedata
@@ -166,9 +167,11 @@ BASE_LABELS = {
 }
 
 SERIE_OPTIONS = [
+    "Berçário",
     "Berçário A",
     "Berçário B",
     "Maternal I",
+    "Maternal II",
     "Pré I",
     "Pré II",
     "1º ano",
@@ -417,9 +420,32 @@ def normalize_grade(value: str) -> str:
     folded = fold_text(value)
     if folded.startswith("BERCARIO"):
         return "Creche 1"
+    if folded.startswith("MATERNAL II"):
+        return "Creche 3"
+    if folded.startswith("MATERNAL I"):
+        return "Creche 2"
     if folded.startswith("MATERNAL"):
         return "Creche 2"
     return smart_title(value)
+
+
+def infer_grade_from_birthdate(value: str, reference_date: date | None = None) -> str:
+    cleaned = cleanup_value(value)
+    if not cleaned:
+        return ""
+    try:
+        birthdate = datetime.strptime(cleaned, "%d/%m/%Y").date()
+    except ValueError:
+        return ""
+    ref = reference_date or date.today()
+    age = ref.year - birthdate.year - ((ref.month, ref.day) < (birthdate.month, birthdate.day))
+    if age <= 1:
+        return "Creche 1"
+    if age == 2:
+        return "Creche 2"
+    if age == 3:
+        return "Creche 3"
+    return ""
 
 
 def preferred_document(cpf: str, rg: str) -> str:
@@ -490,6 +516,9 @@ def format_record(record: dict[str, str]) -> dict[str, str]:
         record[field] = normalize_phone(record.get(field, ""))
     for field in upper_fields:
         record[field] = cleanup_value(record.get(field, "")).upper()
+
+    if not record.get("matricula_etapa_serie"):
+        record["matricula_etapa_serie"] = infer_grade_from_birthdate(record.get("aluno_data_nascimento", ""))
 
     return record
 
