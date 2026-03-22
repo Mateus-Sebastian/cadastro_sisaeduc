@@ -98,8 +98,10 @@ BASE_LABELS = {
     "DATA DE NASCIMENTO:",
     "NOME SOCIAL:",
     "N DO ID DO ALUNO :",
+    "NO DO ID DO ALUNO :",
     "NUMERO DE IDENTIFICACAO SOCIAL (NIS)",
     "N DO CARTAO SUS:",
+    "NO DO CARTAO SUS:",
     "NATURAL DE:",
     "UF:",
     "NACIONALIDADE:",
@@ -118,6 +120,7 @@ BASE_LABELS = {
     "CPF DO ALUNO:",
     "ZONA RESIDENCIAL:",
     "ENDERECO DO ALUNO COM O N:",
+    "ENDERECO DO ALUNO COM O NO:",
     "CEP:",
     "FILIACAO",
     "NOME DA MAE:",
@@ -244,6 +247,18 @@ def fold_text(value: str) -> str:
     normalized = normalized.replace("–", "-").replace("—", "-")
     normalized = re.sub(r"\s+", " ", normalized)
     return normalized.strip().upper()
+
+
+def normalize_label_text(value: str) -> str:
+    return (
+        (value or "")
+        .replace("Âº", "")
+        .replace("Â°", "")
+        .replace("Âª", "")
+        .replace("º", "")
+        .replace("°", "")
+        .replace("ª", "")
+    )
 
 
 def normalize_text(value: str) -> str:
@@ -381,10 +396,12 @@ def normalize_address(value: str) -> str:
         body = re.sub(r"^(RUA|R)[\s:;.-]*", "", cleaned, flags=re.IGNORECASE)
 
     match = re.match(r"^(.*?)(?:,\s*|\s+)(\d+)\s*[-–]?\s*(.*)$", body)
+    if not match:
+        match = re.match(r"^(.*?)\s+-\s*(\d+)(?:\s*[-â€“]\s*(.*))?$", body)
     if match:
         street, number, district = match.groups()
-        street = smart_title(street.strip(" ,;-"))
-        district = smart_title(district.strip(" ,;-"))
+        street = lowercase_leading_preposition(smart_title(street.strip(" ,;-")))
+        district = smart_title((district or "").strip(" ,;-"))
         prefix_text = f"{prefix} " if prefix else ""
         if district:
             result = f"{prefix_text}{street}, {number} - {district}".strip()
@@ -397,7 +414,7 @@ def normalize_address(value: str) -> str:
         return result
 
     prefix_text = f"{prefix} " if prefix else ""
-    result = f"{prefix_text}{smart_title(body)}".strip()
+    result = f"{prefix_text}{lowercase_leading_preposition(smart_title(body))}".strip()
     result = re.sub(r"\bS/N\w*\b", "S/N", result, flags=re.IGNORECASE)
     result = re.sub(r"S/N(?=-)", "S/N ", result, flags=re.IGNORECASE)
     result = re.sub(r"^(Rua)\s+Rua:?\s+", r"\1 ", result, flags=re.IGNORECASE)
@@ -414,6 +431,17 @@ def normalize_student_address(value: str) -> str:
     normalized = re.sub(r"\s*-\s*Alagoa Nova\b", "", normalized, flags=re.IGNORECASE)
     normalized = re.sub(r"\s{2,}", " ", normalized)
     return normalized.strip(" ,-")
+
+
+def lowercase_leading_preposition(value: str) -> str:
+    cleaned = normalize_text(value)
+    if not cleaned:
+        return ""
+    parts = cleaned.split(" ", 1)
+    first = parts[0].lower()
+    if first in LOWERCASE_WORDS:
+        return f"{first} {parts[1]}" if len(parts) > 1 else first
+    return cleaned
 
 
 def normalize_grade(value: str) -> str:
@@ -506,6 +534,12 @@ def format_record(record: dict[str, str]) -> dict[str, str]:
         record[field] = smart_title(strip_parenthetical_text(record.get(field, "")))
     for field in address_fields:
         record[field] = normalize_address(record.get(field, ""))
+    if not record.get("aluno_endereco"):
+        record["aluno_endereco"] = (
+            record.get("mae_endereco", "")
+            or record.get("pai_endereco", "")
+            or record.get("responsavel_endereco", "")
+        )
     record["aluno_endereco"] = normalize_student_address(record.get("aluno_endereco", ""))
     for field in title_fields:
         if field == "matricula_etapa_serie":
@@ -582,9 +616,9 @@ def iter_docx_paragraph_lines(docx_path: Path) -> list[str]:
 
 
 def find_index(lines: list[str], target: str, start: int = 0) -> int:
-    folded_target = fold_text(target)
+    folded_target = fold_text(normalize_label_text(target))
     for index in range(start, len(lines)):
-        if fold_text(lines[index]) == folded_target:
+        if fold_text(normalize_label_text(lines[index])) == folded_target:
             return index
     return -1
 
@@ -740,6 +774,74 @@ def extract_certidao_numero(ident_lines: list[str]) -> str:
     return min(unique_candidates, key=len)
 
 
+def extract_certidao_numero_modelo(ident_lines: list[str]) -> str:
+    model_index = find_index(ident_lines, "(MatrÃ­cula-Modelo Novo)")
+    if model_index < 0:
+        return ""
+    stop_index = find_index(ident_lines, "NOME DO CARTÃ“RIO:", start=model_index + 1)
+    if stop_index < 0:
+        stop_index = len(ident_lines)
+    candidates: list[str] = []
+    for line in ident_lines[model_index + 1 : stop_index]:
+        cleaned = cleanup_value(line)
+        if len(re.sub(r"\D", "", cleaned)) >= 20:
+            candidates.append(cleaned)
+    unique_candidates = list(dict.fromkeys(candidates))
+    if not unique_candidates:
+        return ""
+    return min(unique_candidates, key=len)
+
+
+def extract_certidao_emissao_modelo(ident_lines: list[str]) -> str:
+    model_index = find_index(ident_lines, "(MatrÃ­cula-Modelo Novo)")
+    if model_index < 0:
+        return ""
+    stop_index = find_index(ident_lines, "NOME DO CARTÃ“RIO:", start=model_index + 1)
+    if stop_index < 0:
+        stop_index = len(ident_lines)
+    for line in ident_lines[model_index + 1 : stop_index]:
+        cleaned = cleanup_value(line)
+        if re.fullmatch(r"\d{2}/\d{2}/\d{4}", cleaned):
+            return cleaned
+    return ""
+
+
+def extract_certidao_numero_bloco(ident_lines: list[str]) -> str:
+    start_index = find_index(ident_lines, "CERTIDÃO DE")
+    if start_index < 0:
+        start_index = find_index(ident_lines, "(MatrÃ­cula-Modelo Novo)")
+    if start_index < 0:
+        return ""
+    stop_index = find_index(ident_lines, "NOME DO CARTÃ“RIO:", start=start_index + 1)
+    if stop_index < 0:
+        stop_index = len(ident_lines)
+    candidates: list[str] = []
+    for line in ident_lines[start_index + 1 : stop_index]:
+        cleaned = cleanup_value(line)
+        if len(re.sub(r"\D", "", cleaned)) >= 20:
+            candidates.append(cleaned)
+    unique_candidates = list(dict.fromkeys(candidates))
+    if not unique_candidates:
+        return ""
+    return min(unique_candidates, key=len)
+
+
+def extract_certidao_emissao_bloco(ident_lines: list[str]) -> str:
+    start_index = find_index(ident_lines, "CERTIDÃO DE")
+    if start_index < 0:
+        start_index = find_index(ident_lines, "(MatrÃ­cula-Modelo Novo)")
+    if start_index < 0:
+        return ""
+    stop_index = find_index(ident_lines, "NOME DO CARTÃ“RIO:", start=start_index + 1)
+    if stop_index < 0:
+        stop_index = len(ident_lines)
+    for line in ident_lines[start_index + 1 : stop_index]:
+        cleaned = cleanup_value(line)
+        if re.fullmatch(r"\d{2}/\d{2}/\d{4}", cleaned):
+            return cleaned
+    return ""
+
+
 def extract_observacoes(comp_lines: list[str]) -> str:
     start_index = find_any_index(comp_lines, ["FAZ USO DE ALGUM TIPO DE MEDICAMENTO:", "6 - OBSERVAÇÕES"], start=0)
     if start_index < 0:
@@ -754,6 +856,18 @@ def extract_point_of_reference(paragraph_lines: list[str]) -> str:
             continue
         value = line.split(":", 1)[1] if ":" in line else ""
         return cleanup_value(value)
+    stop_index = len(paragraph_lines)
+    for index, line in enumerate(paragraph_lines):
+        if "4 - DADOS DA MATRICULA DO ALUNO" in fold_text(line):
+            stop_index = index
+            break
+    for line in paragraph_lines[:stop_index]:
+        cleaned = cleanup_value(line)
+        if not cleaned or is_label_line(cleaned):
+            continue
+        folded = fold_text(cleaned)
+        if "PROXIM" in folded or folded.startswith("CASA ") or folded.startswith("RESIDENCIA "):
+            return cleaned
     return ""
 
 
@@ -798,6 +912,10 @@ def parse_student_docx(docx_path: Path, base_dir: Path | None = None) -> dict[st
     endereco_index = find_index(ident_lines, "ENDEREÇO DO ALUNO COM O Nº:", start=aluno_uf_index if aluno_uf_index >= 0 else 0)
     if endereco_index < 0:
         endereco_index = find_index(ident_lines, "ENDEREÇO DO ALUNO COM O N°:", start=aluno_uf_index if aluno_uf_index >= 0 else 0)
+    if endereco_index < 0:
+        endereco_index = find_index(ident_lines, "ENDEREÃ‡O DO ALUNO COM O No:", start=aluno_uf_index if aluno_uf_index >= 0 else 0)
+    if endereco_index < 0:
+        endereco_index = find_index(ident_lines, "ENDEREÇO DO ALUNO COM O No:", start=aluno_uf_index if aluno_uf_index >= 0 else 0)
     cep_index = find_index(ident_lines, "CEP:", start=endereco_index if endereco_index >= 0 else 0)
 
     programa_index = find_index(matricula_lines, "PARTICIPANTE DE ALGUM PROGRAMA ESCOLAR:")
@@ -848,17 +966,19 @@ def parse_student_docx(docx_path: Path, base_dir: Path | None = None) -> dict[st
     record["aluno_nome"] = filename_student_name if use_filename_student_name else extracted_student_name
     record["aluno_data_nascimento"] = cleanup_value(next_value(ident_lines, find_index(ident_lines, "DATA DE NASCIMENTO:")))
     record["aluno_nome_social"] = cleanup_value(next_value(ident_lines, find_index(ident_lines, "NOME SOCIAL:")))
-    record["aluno_id"] = cleanup_value(next_value(ident_lines, find_index(ident_lines, "N DO ID DO ALUNO :")))
+    record["aluno_id"] = cleanup_value(next_value(ident_lines, find_any_index(ident_lines, ["N DO ID DO ALUNO :", "NO DO ID DO ALUNO :"])))
     record["aluno_nis"] = cleanup_value(next_value(ident_lines, find_index(ident_lines, "NÚMERO DE IDENTIFICAÇÃO SOCIAL (NIS)")))
     record["aluno_cartao_sus"] = cleanup_value(next_value(ident_lines, find_index(ident_lines, "Nº DO CARTÃO SUS:")))
+    if not record["aluno_cartao_sus"]:
+        record["aluno_cartao_sus"] = cleanup_value(next_value(ident_lines, find_index(ident_lines, "No DO CARTÃO SUS:")))
     record["aluno_naturalidade"] = cleanup_value(next_value(ident_lines, naturalidade_index, uf_naturalidade_index))
     record["aluno_uf_naturalidade"] = cleanup_value(next_value(ident_lines, uf_naturalidade_index, nacionalidade_index))
     record["aluno_nacionalidade"] = cleanup_value(next_value(ident_lines, nacionalidade_index))
     record["aluno_sexo"] = parse_marked_option(sexo_block, ["Masculino", "Feminino"])
     record["aluno_cor_raca"] = parse_marked_option(cor_block, ["Branca", "Preta", "Parda", "Amarela", "Indígena"])
     record["certidao_tipo"] = parse_marked_option(certidao_block, ["Nascimento", "Casamento"])
-    record["certidao_numero"] = cleanup_value(extract_certidao_numero(ident_lines))
-    record["certidao_emissao"] = cleanup_value(next_value(ident_lines, emissao_indices[1])) if len(emissao_indices) > 1 else ""
+    record["certidao_numero"] = cleanup_value(extract_certidao_numero_bloco(ident_lines))
+    record["certidao_emissao"] = cleanup_value(extract_certidao_emissao_bloco(ident_lines))
     record["certidao_cartorio"] = cleanup_value(next_value(ident_lines, cartorio_index, municipio_certidao_index))
     record["certidao_municipio"] = strip_trailing_uf(certidao_municipio)
     record["certidao_uf"] = cleanup_value(next_value(ident_lines, uf_certidao_index))

@@ -16,3 +16,4 @@
 {"row_number": 31, "student_name": "Moisés da Silva Cirino", "status": "filled_for_review", "message": "Preenchido automaticamente para revisão; nenhum salvamento foi acionado.", "timestamp": "2026-03-20T10:43:01"}
 {"row_number": 4, "student_name": "Bernardo Nicolau Roseno", "status": "filled_for_review", "message": "Preenchido automaticamente para revisão; nenhum salvamento foi acionado.", "timestamp": "2026-03-20T10:49:21"}
 {"row_number": 4, "student_name": "Bernardo Nicolau Roseno", "status": "filled_for_review", "message": "Preenchido automaticamente para revisão; nenhum salvamento foi acionado.", "timestamp": "2026-03-20T10:52:43"}
+{"row_number": 1, "student_name": "Ana Cecília Alves da Silva", "status": "error", "message": "EOF when reading a line", "timestamp": "2026-03-21T23:19:28"}
