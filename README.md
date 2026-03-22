@@ -43,6 +43,12 @@ Salvar a posição do primeiro campo:
 python scripts/fill_sisaeduc.py --save-start-position
 ```
 
+Posição pc comum:
+{
+  "x": 354,
+  "y": 614
+}
+
 Depois disso, nas execuções normais o script clica automaticamente na posição salva antes de preencher.
 
 ## Ajuste da ordem de Tab
