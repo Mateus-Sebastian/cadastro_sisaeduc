@@ -43,6 +43,12 @@ Salvar a posição do primeiro campo:
 python scripts/fill_sisaeduc.py --save-start-position
 ```
 
+Salvar a posição do primeiro campo para as próximas fichas, quando a mensagem de sucesso estiver visível:
+
+```bash
+python scripts/fill_sisaeduc.py --save-resume-position
+```
+
 Posição pc comum:
 {
   "x": 354,
@@ -50,6 +56,7 @@ Posição pc comum:
 }
 
 Depois disso, nas execuções normais o script clica automaticamente na posição salva antes de preencher.
+Na primeira linha ele usa a posição inicial normal; da segunda em diante ele usa a posição de retomada, se ela existir.
 
 ## Ajuste da ordem de Tab
 

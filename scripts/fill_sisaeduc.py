@@ -68,6 +68,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Não clica automaticamente na posição salva antes de preencher.",
     )
+    parser.add_argument(
+        "--resume-position-file",
+        default="config/first_field_position_resume.json",
+        help="Arquivo JSON com a posição salva do primeiro campo quando houver mensagem de sucesso.",
+    )
+    parser.add_argument(
+        "--save-resume-position",
+        action="store_true",
+        help="Salva a posição atual do mouse como primeiro campo para os alunos seguintes e encerra.",
+    )
     return parser
 
 
@@ -313,6 +323,7 @@ def run_live(
     review_seconds: float,
     auto_status: str,
     start_position: dict[str, int] | None,
+    resume_position: dict[str, int] | None,
 ) -> int:
     pyautogui = get_pyautogui()
     for row_number, row in rows:
@@ -386,13 +397,15 @@ def run_live_with_start_position(
     review_seconds: float,
     auto_status: str,
     start_position: dict[str, int] | None,
+    resume_position: dict[str, int] | None,
 ) -> int:
     pyautogui = get_pyautogui()
     for row_index, (row_number, row) in enumerate(rows):
         aluno_nome = row.get("aluno_nome", "").strip()
         current_start_delay = start_delay if row_index == 0 else (resume_delay if resume_delay is not None else start_delay)
+        current_position = start_position if row_index == 0 else (resume_position or start_position)
         print(f"\n[Linha {row_number}] {aluno_nome}")
-        if start_position:
+        if current_position:
             print("Posicione o navegador no formulário em branco; o script clicará no primeiro campo salvo.")
         else:
             print("Posicione o navegador no formulário em branco e foque o primeiro campo.")
@@ -401,8 +414,8 @@ def run_live_with_start_position(
             time.sleep(current_start_delay)
         else:
             input("Pressione Enter para iniciar o preenchimento desta linha...")
-        if start_position:
-            click_start_position(pyautogui, start_position, delay)
+        if current_position:
+            click_start_position(pyautogui, current_position, delay)
 
         try:
             for entry in config:
@@ -463,6 +476,7 @@ def main() -> int:
     config_path = Path(args.config).resolve()
     log_file = Path(args.log_file).resolve()
     start_position_path = Path(args.start_position_file).resolve()
+    resume_position_path = Path(args.resume_position_file).resolve()
 
     if not csv_path.exists():
         parser.error(f"CSV não encontrado: {csv_path}")
@@ -470,16 +484,30 @@ def main() -> int:
         parser.error(f"Configuração não encontrada: {config_path}")
 
     if args.save_start_position:
+        if args.start_delay > 0:
+            print(f"Salvando a posição inicial em {args.start_delay:.1f}s...")
+            time.sleep(args.start_delay)
         pyautogui = get_pyautogui()
         x, y = pyautogui.position()
         save_start_position(start_position_path, int(x), int(y))
         print(f"Posição inicial salva em: {start_position_path}")
         print(f"x={int(x)} y={int(y)}")
         return 0
+    if args.save_resume_position:
+        if args.start_delay > 0:
+            print(f"Salvando a posição de retomada em {args.start_delay:.1f}s...")
+            time.sleep(args.start_delay)
+        pyautogui = get_pyautogui()
+        x, y = pyautogui.position()
+        save_start_position(resume_position_path, int(x), int(y))
+        print(f"PosiÃ§Ã£o de retomada salva em: {resume_position_path}")
+        print(f"x={int(x)} y={int(y)}")
+        return 0
 
     rows = load_rows(csv_path)
     config = load_config(config_path)
     start_position = None if args.no_click_start_position else load_start_position(start_position_path)
+    resume_position = None if args.no_click_start_position else load_start_position(resume_position_path)
     subset = row_subset(rows, args.start_row, args.limit)
     if not subset:
         parser.error("Nenhuma linha selecionada para processar.")
@@ -506,6 +534,7 @@ def main() -> int:
         args.review_seconds,
         args.auto_status.strip(),
         start_position,
+        resume_position,
     )
 
 
