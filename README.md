@@ -8,7 +8,7 @@ Pipeline para:
 
 ## Scripts
 
-- `scripts/extract_students.py`: lê as fichas de `MATRICULAS CLODOMIRO LEAL/` e gera o CSV.
+- `scripts/extract_students.py`: lê as fichas de `matriculas/` e gera o CSV.
 - `scripts/fill_sisaeduc.py`: usa o CSV e a ordem definida em `config/sisaeduc_tab_order.json`.
 
 ## Uso

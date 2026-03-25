@@ -14,7 +14,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--input-dir",
-        default="MATRICULAS CLODOMIRO LEAL",
+        default="matriculas",
         help="Pasta raiz com os .docx de matrícula.",
     )
     parser.add_argument(

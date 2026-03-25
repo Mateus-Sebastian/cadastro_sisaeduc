@@ -1,1 +1,7 @@
-/MATRICULAS CLODOMIRO LEAL
+/matriculas
+/logs/
+/output/csv/
+/config/first_field_position.json
+/config/first_field_position_resume.json
+__pycache__/
+*.py[cod]

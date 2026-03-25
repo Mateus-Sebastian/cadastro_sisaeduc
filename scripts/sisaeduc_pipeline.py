@@ -342,8 +342,10 @@ def collapse_repeated_letters(value: str) -> str:
 def should_replace_student_name_with_filename(extracted_name: str, filename_name: str) -> bool:
     extracted = smart_title(strip_parenthetical_text(extracted_name))
     filename = smart_title(strip_parenthetical_text(filename_name))
-    if not extracted or not filename:
+    if not filename:
         return False
+    if not extracted:
+        return True
     if fold_text(extracted) == fold_text(filename):
         return False
 
@@ -913,7 +915,7 @@ def collect_docx_files(input_dir: Path) -> list[Path]:
 def parse_student_docx(docx_path: Path, base_dir: Path | None = None) -> dict[str, str]:
     lines = iter_docx_lines(docx_path)
     paragraph_lines = iter_docx_paragraph_lines(docx_path)
-    if not any("EDUCAÇÃO INFANTIL - 2026" in line for line in lines[:40]):
+    if not any(("EDUCAÇÃO INFANTIL - 2026" in line) or ("EDUCAÇÃO INFANTIL - 2025" in line) for line in lines[:40]):
         raise ValueError("Layout de ficha não suportado pelo extrator atual.")
 
     ident_lines = section_slice(lines, "2 - DADOS DE IDENTIFICAÇÃO DO ALUNO", "3 - DADOS DO RESPONSÁVEL PELO ALUNO")

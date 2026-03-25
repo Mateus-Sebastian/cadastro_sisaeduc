@@ -198,6 +198,8 @@ def get_pyautogui():
 
 
 def click_start_position(pyautogui: Any, position: dict[str, int], delay: float) -> None:
+    pyautogui.hotkey("alt", "tab")
+    time.sleep(max(delay, 0.3))
     pyautogui.press("home")
     time.sleep(delay)
     pyautogui.scroll(4000)
