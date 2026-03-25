@@ -150,6 +150,16 @@ def resolve_value(row: dict[str, str], entry: dict[str, Any]) -> str:
     return value
 
 
+def entry_is_enabled(row: dict[str, str], entry: dict[str, Any]) -> bool:
+    required_column = entry.get("enabled_if_column_nonempty")
+    if required_column and not (row.get(required_column, "") or "").strip():
+        return False
+    empty_column = entry.get("enabled_if_column_empty")
+    if empty_column and (row.get(empty_column, "") or "").strip():
+        return False
+    return True
+
+
 def append_log(log_path: Path, payload: dict[str, Any]) -> None:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("a", encoding="utf-8") as handle:
@@ -291,7 +301,13 @@ def execute_entry_safe(pyautogui: Any, entry: dict[str, Any], value: str, delay:
     if entry.get("tab_after", True):
         pyautogui.press("tab")
         time.sleep(delay)
-        for _ in range(int(entry.get("extra_tabs", 0))):
+        extra_tabs = int(entry.get("extra_tabs", 0))
+        extra_tabs_by_value = entry.get("extra_tabs_by_value", {})
+        if isinstance(extra_tabs_by_value, dict):
+            extra_tabs = int(
+                extra_tabs_by_value.get(value, extra_tabs_by_value.get(normalize_key(value), extra_tabs))
+            )
+        for _ in range(extra_tabs):
             pyautogui.press("tab")
             time.sleep(delay)
 
@@ -309,6 +325,8 @@ def run_dry_run(rows: list[tuple[int, dict[str, str]]], config: list[dict[str, A
     for row_number, row in rows:
         print(f"\n[Linha {row_number}] {row.get('aluno_nome', '').strip()}")
         for entry in config:
+            if not entry_is_enabled(row, entry):
+                continue
             value = resolve_value(row, entry)
             print(" - " + preview_entry(entry, value))
     return 0
@@ -338,6 +356,8 @@ def run_live(
 
         try:
             for entry in config:
+                if not entry_is_enabled(row, entry):
+                    continue
                 value = resolve_value(row, entry)
                 execute_entry_safe(pyautogui, entry, value, delay)
 
@@ -419,6 +439,8 @@ def run_live_with_start_position(
 
         try:
             for entry in config:
+                if not entry_is_enabled(row, entry):
+                    continue
                 value = resolve_value(row, entry)
                 execute_entry_safe(pyautogui, entry, value, delay)
 

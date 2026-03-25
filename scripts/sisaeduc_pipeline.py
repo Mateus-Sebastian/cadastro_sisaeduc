@@ -39,6 +39,8 @@ CSV_COLUMNS = [
     "aluno_cep",
     "ponto_referencia",
     "telefone_contato",
+    "tem_alergias",
+    "alergias_descricao",
     "mae_nome",
     "mae_endereco",
     "mae_municipio",
@@ -284,6 +286,16 @@ def cleanup_value(value: str) -> str:
     return cleaned
 
 
+def cleanup_point_of_reference(value: str) -> str:
+    cleaned = cleanup_value(value)
+    if not cleaned:
+        return ""
+    folded = re.sub(r"[^A-Z0-9 ]+", "", fold_text(cleaned)).strip()
+    if folded == "PROXIMO":
+        return ""
+    return cleaned
+
+
 def strip_parenthetical_text(value: str) -> str:
     return normalize_text(re.sub(r"\s*\([^)]*\)", "", value or ""))
 
@@ -444,6 +456,17 @@ def lowercase_leading_preposition(value: str) -> str:
     return cleaned
 
 
+def extract_alergias(deficiencia_tipos: str, observacoes: str = "") -> str:
+    alergias: list[str] = []
+    for item in [part.strip() for part in (deficiencia_tipos or "").split(";") if part.strip()]:
+        folded = fold_text(item)
+        if "INTOLERANCIA" in folded or "ALERG" in folded:
+            alergias.append(item)
+    if not alergias and "ALERG" in fold_text(observacoes):
+        alergias.append("Alergia")
+    return "; ".join(dict.fromkeys(alergias))
+
+
 def normalize_grade(value: str) -> str:
     folded = fold_text(value)
     if folded.startswith("BERCARIO"):
@@ -526,6 +549,7 @@ def format_record(record: dict[str, str]) -> dict[str, str]:
         "programa_escolar_qual",
         "escola_procedencia",
         "deficiencia_tipos",
+        "alergias_descricao",
     }
     phone_fields = {"telefone_contato", "mae_telefone", "pai_telefone", "responsavel_whatsapp"}
     upper_fields = {"aluno_uf_naturalidade", "certidao_uf", "aluno_uf", "mae_uf", "pai_uf", "responsavel_uf"}
@@ -550,6 +574,12 @@ def format_record(record: dict[str, str]) -> dict[str, str]:
         record[field] = normalize_phone(record.get(field, ""))
     for field in upper_fields:
         record[field] = cleanup_value(record.get(field, "")).upper()
+
+    record["alergias_descricao"] = extract_alergias(
+        record.get("deficiencia_tipos", ""),
+        record.get("observacoes_raw", ""),
+    )
+    record["tem_alergias"] = "Sim" if record["alergias_descricao"] else "Não"
 
     if not record.get("matricula_etapa_serie"):
         record["matricula_etapa_serie"] = infer_grade_from_birthdate(record.get("aluno_data_nascimento", ""))
@@ -855,7 +885,7 @@ def extract_point_of_reference(paragraph_lines: list[str]) -> str:
         if "PONTO DE REFERENCIA:" not in fold_text(line):
             continue
         value = line.split(":", 1)[1] if ":" in line else ""
-        return cleanup_value(value)
+        return cleanup_point_of_reference(value)
     stop_index = len(paragraph_lines)
     for index, line in enumerate(paragraph_lines):
         if "4 - DADOS DA MATRICULA DO ALUNO" in fold_text(line):
@@ -867,7 +897,7 @@ def extract_point_of_reference(paragraph_lines: list[str]) -> str:
             continue
         folded = fold_text(cleaned)
         if "PROXIM" in folded or folded.startswith("CASA ") or folded.startswith("RESIDENCIA "):
-            return cleaned
+            return cleanup_point_of_reference(cleaned)
     return ""
 
 
@@ -925,6 +955,8 @@ def parse_student_docx(docx_path: Path, base_dir: Path | None = None) -> dict[st
     itinerancia_index = find_index(matricula_lines, "SITUAÇÃO DE INTINERANCIA:", start=em_que_ano_index if em_que_ano_index >= 0 else 0)
 
     cid_index = find_index(comp_lines, "CID Nº:")
+    if cid_index < 0:
+        cid_index = find_index(comp_lines, "CID No:")
     medicamento_index = find_index(comp_lines, "FAZ USO DE ALGUM TIPO DE MEDICAMENTO:")
     cuidador_index = find_index(comp_lines, "NECESSITA DE CUIDADOR:")
 

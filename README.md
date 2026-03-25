@@ -52,8 +52,16 @@ python scripts/fill_sisaeduc.py --save-resume-position
 Posição pc comum:
 {
   "x": 354,
-  "y": 614
+  "y": 613
 }
+
+Posição pc main:
+{
+  "x": 966,
+  "y": 613
+}
+
++71 no "y" para position_resume
 
 Depois disso, nas execuções normais o script clica automaticamente na posição salva antes de preencher.
 Na primeira linha ele usa a posição inicial normal; da segunda em diante ele usa a posição de retomada, se ela existir.

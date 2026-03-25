@@ -22,7 +22,8 @@
 
     { "field_id": "utiliza_transporte", "csv_column": "utiliza_transporte", "action_type": "choice", "choice_fallback": "type_value", "default": "Não", "extra_tabs": 1 },
     { "field_id": "tipo_sanguineo", "action_type": "skip" },
-    { "field_id": "tem_alergias", "action_type": "choice", "choice_fallback": "type_value", "default": "Não", "extra_tabs": 1 },
+    { "field_id": "tem_alergias", "csv_column": "tem_alergias", "action_type": "choice", "choice_fallback": "type_value", "default": "Não", "extra_tabs": 1 },
+    { "field_id": "descricao_alergias", "csv_column": "alergias_descricao", "action_type": "text", "enabled_if_column_nonempty": "alergias_descricao" },
 
     { "field_id": "vulnerabilidade_social", "csv_column": "vulnerabilidade_social", "action_type": "choice", "choice_fallback": "type_value", "default": "Não", "extra_tabs": 1 },
 
