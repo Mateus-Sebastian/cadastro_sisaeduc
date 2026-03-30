@@ -458,15 +458,40 @@ def lowercase_leading_preposition(value: str) -> str:
     return cleaned
 
 
+def sentence_case(value: str) -> str:
+    cleaned = normalize_text(value)
+    if not cleaned:
+        return ""
+    lowered = cleaned.lower()
+    return lowered[:1].upper() + lowered[1:]
+
+
+def normalize_alergia_item(value: str) -> str:
+    cleaned = cleanup_value(value)
+    if not cleaned:
+        return ""
+    cleaned = re.sub(r"(?i)^alergias?\s*:\s*", "", cleaned)
+    cleaned = re.sub(r"(?i)^alergia\s+a\s+", "", cleaned)
+    cleaned = re.sub(r"(?i)^al[ée]rgic[ao]\s+a\s+", "", cleaned)
+    cleaned = re.sub(r"(?i)^al[ée]rgic[ao]\s*:\s*", "", cleaned)
+    cleaned = cleaned.strip(" .;,:-")
+    return sentence_case(cleaned)
+
+
 def extract_alergias(deficiencia_tipos: str, observacoes: str = "") -> str:
     alergias: list[str] = []
     for item in [part.strip() for part in (deficiencia_tipos or "").split(";") if part.strip()]:
         folded = fold_text(item)
         if "INTOLERANCIA" in folded or "ALERG" in folded:
             alergias.append(item)
+    for item in [cleanup_value(part) for part in (observacoes or "").split("|") if cleanup_value(part)]:
+        folded = fold_text(item)
+        if "INTOLERANCIA" in folded or "ALERG" in folded:
+            alergias.append(item)
     if not alergias and "ALERG" in fold_text(observacoes):
         alergias.append("Alergia")
-    return "; ".join(dict.fromkeys(alergias))
+    normalized = [normalize_alergia_item(item) for item in alergias if normalize_alergia_item(item)]
+    return "; ".join(dict.fromkeys(normalized))
 
 
 def normalize_grade(value: str) -> str:
@@ -511,6 +536,16 @@ def preferred_phone(*phones: str) -> str:
         if normalized:
             return normalized
     return ""
+
+
+def normalize_sus_card(value: str) -> str:
+    cleaned = cleanup_value(value)
+    if not cleaned:
+        return ""
+    digits = re.sub(r"\D", "", cleaned)
+    if len(digits) != 15:
+        return ""
+    return f"{digits[:3]} {digits[3:7]} {digits[7:11]} {digits[11:]}"
 
 
 def format_record(record: dict[str, str]) -> dict[str, str]:
@@ -576,6 +611,7 @@ def format_record(record: dict[str, str]) -> dict[str, str]:
         record[field] = normalize_phone(record.get(field, ""))
     for field in upper_fields:
         record[field] = cleanup_value(record.get(field, "")).upper()
+    record["aluno_cartao_sus"] = normalize_sus_card(record.get("aluno_cartao_sus", ""))
 
     record["alergias_descricao"] = extract_alergias(
         record.get("deficiencia_tipos", ""),
@@ -875,7 +911,13 @@ def extract_certidao_emissao_bloco(ident_lines: list[str]) -> str:
 
 
 def extract_observacoes(comp_lines: list[str]) -> str:
-    start_index = find_any_index(comp_lines, ["FAZ USO DE ALGUM TIPO DE MEDICAMENTO:", "6 - OBSERVAÇÕES"], start=0)
+    start_index = find_any_index(comp_lines, ["6 - OBSERVA??ES", "6 - OBSERVACOES"], start=0)
+    if start_index >= 0:
+        relevant = [cleanup_value(line) for line in comp_lines[start_index + 1 :] if cleanup_value(line)]
+        relevant = [line for line in relevant if not is_label_line(line)]
+        return " | ".join(dict.fromkeys(relevant))
+
+    start_index = find_any_index(comp_lines, ["FAZ USO DE ALGUM TIPO DE MEDICAMENTO:", "6 - OBSERVA??ES"], start=0)
     if start_index < 0:
         return ""
     relevant = [cleanup_value(line) for line in comp_lines[start_index:] if cleanup_value(line)]
@@ -1001,10 +1043,53 @@ def parse_student_docx(docx_path: Path, base_dir: Path | None = None) -> dict[st
     record["aluno_data_nascimento"] = cleanup_value(next_value(ident_lines, find_index(ident_lines, "DATA DE NASCIMENTO:")))
     record["aluno_nome_social"] = cleanup_value(next_value(ident_lines, find_index(ident_lines, "NOME SOCIAL:")))
     record["aluno_id"] = cleanup_value(next_value(ident_lines, find_any_index(ident_lines, ["N DO ID DO ALUNO :", "NO DO ID DO ALUNO :"])))
-    record["aluno_nis"] = cleanup_value(next_value(ident_lines, find_index(ident_lines, "NÚMERO DE IDENTIFICAÇÃO SOCIAL (NIS)")))
-    record["aluno_cartao_sus"] = cleanup_value(next_value(ident_lines, find_index(ident_lines, "Nº DO CARTÃO SUS:")))
+    record["aluno_nis"] = cleanup_value(
+        next_value(
+            ident_lines,
+            find_any_index(
+                ident_lines,
+                [
+                    "NUMERO DE IDENTIFICACAO SOCIAL (NIS):",
+                    "NUMERO DE IDENTIFICACAO SOCIAL (NIS)",
+                    "NÚMERO DE IDENTIFICAÇÃO SOCIAL (NIS):",
+                    "NÚMERO DE IDENTIFICAÇÃO SOCIAL (NIS)",
+                ],
+            ),
+        )
+    )
+    record["aluno_cartao_sus"] = cleanup_value(
+        next_value(
+            ident_lines,
+            find_any_index(
+                ident_lines,
+                [
+                    "NO DO CARTAO SUS:",
+                    "NO DO CARTAO SUS",
+                    "N DO CARTAO SUS:",
+                    "N DO CARTAO SUS",
+                    "Nº DO CARTÃO SUS:",
+                    "No DO CARTÃO SUS:",
+                ],
+            ),
+        )
+    )
     if not record["aluno_cartao_sus"]:
-        record["aluno_cartao_sus"] = cleanup_value(next_value(ident_lines, find_index(ident_lines, "No DO CARTÃO SUS:")))
+        record["aluno_cartao_sus"] = cleanup_value(
+            next_value(
+                ident_lines,
+                find_any_index(
+                    ident_lines,
+                    [
+                        "NO DO CARTAO SUS:",
+                        "NO DO CARTAO SUS",
+                        "N DO CARTAO SUS:",
+                        "N DO CARTAO SUS",
+                        "Nº DO CARTÃO SUS:",
+                        "No DO CARTÃO SUS:",
+                    ],
+                ),
+            )
+        )
     record["aluno_naturalidade"] = cleanup_value(next_value(ident_lines, naturalidade_index, uf_naturalidade_index))
     record["aluno_uf_naturalidade"] = cleanup_value(next_value(ident_lines, uf_naturalidade_index, nacionalidade_index))
     record["aluno_nacionalidade"] = cleanup_value(next_value(ident_lines, nacionalidade_index))

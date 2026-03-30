@@ -87,7 +87,7 @@ def load_rows(csv_path: Path) -> list[dict[str, str]]:
 
 
 def load_config(config_path: Path) -> list[dict[str, Any]]:
-    with config_path.open("r", encoding="utf-8") as handle:
+    with config_path.open("r", encoding="utf-8-sig") as handle:
         payload = json.load(handle)
     fields = payload.get("fields", []) if isinstance(payload, dict) else payload
     if not isinstance(fields, list):
@@ -101,7 +101,7 @@ def load_config(config_path: Path) -> list[dict[str, Any]]:
 def load_start_position(position_path: Path) -> dict[str, int] | None:
     if not position_path.exists():
         return None
-    with position_path.open("r", encoding="utf-8") as handle:
+    with position_path.open("r", encoding="utf-8-sig") as handle:
         payload = json.load(handle)
     x = payload.get("x")
     y = payload.get("y")
