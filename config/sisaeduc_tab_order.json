@@ -47,6 +47,16 @@
     { "field_id": "tamanho_camisa", "action_type": "skip", "clear_first": true },
     { "field_id": "tamanho_calcado", "action_type": "skip", "clear_first": true },
 
-    { "field_id": "serie_inicial", "csv_column": "matricula_etapa_serie", "action_type": "choice", "choice_fallback": "type_value", "extra_tabs": 2 }
+    {
+      "field_id": "serie_inicial",
+      "csv_column": "matricula_etapa_serie",
+      "action_type": "choice",
+      "choice_fallback": "type_value",
+      "extra_tabs": 3,
+      "post_actions": [
+        { "type": "press_home" },
+        { "type": "copy_column_to_clipboard", "csv_column": "aluno_nome" }
+      ]
+    }
   ]
 }

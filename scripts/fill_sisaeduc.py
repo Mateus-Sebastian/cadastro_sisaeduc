@@ -233,9 +233,38 @@ def press_keys(pyautogui: Any, keys: list[str], delay: float) -> None:
         time.sleep(delay)
 
 
-def execute_entry(pyautogui: Any, entry: dict[str, Any], value: str, delay: float) -> None:
+def run_post_actions(
+    pyautogui: Any,
+    row: dict[str, str],
+    entry: dict[str, Any],
+    delay: float,
+) -> None:
+    actions = entry.get("post_actions", [])
+    if not isinstance(actions, list):
+        return
+    for action in actions:
+        if not isinstance(action, dict):
+            continue
+        action_type = action.get("type", "")
+        if action_type == "press_home":
+            pyautogui.press("home")
+            time.sleep(delay)
+        elif action_type == "copy_column_to_clipboard":
+            column = str(action.get("csv_column", "")).strip()
+            if column:
+                copy_to_clipboard((row.get(column, "") or "").strip())
+        elif action_type == "copy_value":
+            copy_to_clipboard(str(action.get("value", "")))
+        elif action_type == "sleep":
+            time.sleep(float(action.get("seconds", delay)))
+        else:
+            raise ValueError(f"post_action não suportada: {action_type}")
+
+
+def execute_entry(pyautogui: Any, row: dict[str, str], entry: dict[str, Any], value: str, delay: float) -> None:
     action_type = entry["action_type"]
     clear_first = bool(entry.get("clear_first", action_type == "text"))
+    should_apply_extra_tabs = True
 
     if action_type == "text":
         if clear_first:
@@ -265,6 +294,8 @@ def execute_entry(pyautogui: Any, entry: dict[str, Any], value: str, delay: floa
             pyautogui.press("tab")
             time.sleep(delay)
 
+    run_post_actions(pyautogui, row, entry, delay)
+
     if entry.get("pause_after"):
         time.sleep(float(entry["pause_after"]))
 
@@ -274,10 +305,9 @@ def preview_entry(entry: dict[str, Any], value: str) -> str:
     return f"{entry['field_id']}: action={entry['action_type']} column={column or '-'} value={value!r}"
 
 
-def execute_entry_safe(pyautogui: Any, entry: dict[str, Any], value: str, delay: float) -> None:
+def execute_entry_safe(pyautogui: Any, row: dict[str, str], entry: dict[str, Any], value: str, delay: float) -> None:
     action_type = entry["action_type"]
     clear_first = bool(entry.get("clear_first", action_type == "text"))
-    should_apply_extra_tabs = True
 
     if action_type == "text":
         if clear_first:
@@ -312,6 +342,8 @@ def execute_entry_safe(pyautogui: Any, entry: dict[str, Any], value: str, delay:
         for _ in range(extra_tabs):
             pyautogui.press("tab")
             time.sleep(delay)
+
+    run_post_actions(pyautogui, row, entry, delay)
 
     if entry.get("pause_after"):
         time.sleep(float(entry["pause_after"]))
@@ -361,7 +393,7 @@ def run_live(
                 if not entry_is_enabled(row, entry):
                     continue
                 value = resolve_value(row, entry)
-                execute_entry_safe(pyautogui, entry, value, delay)
+                execute_entry_safe(pyautogui, row, entry, value, delay)
 
             if auto_status:
                 if review_seconds > 0:
@@ -444,7 +476,7 @@ def run_live_with_start_position(
                 if not entry_is_enabled(row, entry):
                     continue
                 value = resolve_value(row, entry)
-                execute_entry_safe(pyautogui, entry, value, delay)
+                execute_entry_safe(pyautogui, row, entry, value, delay)
 
             if auto_status:
                 if review_seconds > 0:
