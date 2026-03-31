@@ -9,7 +9,7 @@
     { "field_id": "endereco", "csv_column": "aluno_endereco", "action_type": "text" },
     { "field_id": "zona", "csv_column": "aluno_zona", "action_type": "choice", "choice_fallback": "type_value", "extra_tabs": 1 },
     { "field_id": "sexo", "csv_column": "aluno_sexo", "action_type": "choice", "choice_fallback": "type_value", "extra_tabs": 1 },
-    { "field_id": "etnia", "csv_column": "aluno_cor_raca", "action_type": "choice", "choice_fallback": "type_value", "extra_tabs": 1 },
+    { "field_id": "etnia", "csv_column": "aluno_cor_raca", "action_type": "choice", "choice_fallback": "type_value", "default": "Não declarada", "extra_tabs": 1 },
 
     { "field_id": "nee", "csv_column": "pessoa_com_deficiencia", "action_type": "choice", "choice_fallback": "type_value", "default": "Não", "extra_tabs": 1 },
     { "field_id": "id_censo", "csv_column": "aluno_id", "action_type": "text", "clear_first": true, "pause_after": 0.25 },
