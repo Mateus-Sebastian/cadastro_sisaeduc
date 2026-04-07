@@ -860,6 +860,55 @@ def extract_header_numeric_fields(ident_lines: list[str]) -> dict[str, str]:
     if social_index < 0 or naturalidade_index < 0 or naturalidade_index <= social_index:
         return {"aluno_id": "", "aluno_nis": "", "aluno_cartao_sus": ""}
 
+    id_index = find_any_index_prefix(
+        ident_lines,
+        [
+            "N DO ID DO ALUNO :",
+            "NO DO ID DO ALUNO :",
+            "Nº DO ID DO ALUNO :",
+            "Nº DO ID DO ALUNO:",
+            "NO DO ID DO ALUNO:",
+            "N DO ID DO ALUNO:",
+        ],
+    )
+    nis_index = find_any_index_prefix(
+        ident_lines,
+        [
+            "NUMERO DE IDENTIFICACAO SOCIAL (NIS):",
+            "NUMERO DE IDENTIFICACAO SOCIAL (NIS)",
+            "N?MERO DE IDENTIFICA??O SOCIAL (NIS):",
+            "N?MERO DE IDENTIFICA??O SOCIAL (NIS)",
+            "NÚMERO DE IDENTIFICAÇÃO SOCIAL (NIS):",
+            "NÚMERO DE IDENTIFICAÇÃO SOCIAL (NIS)",
+        ],
+    )
+    sus_index = find_any_index_prefix(
+        ident_lines,
+        [
+            "NO DO CARTAO SUS:",
+            "NO DO CARTAO SUS",
+            "N DO CARTAO SUS:",
+            "N DO CARTAO SUS",
+            "N? DO CART?O SUS:",
+            "No DO CART?O SUS:",
+            "Nº DO CARTÃO SUS:",
+            "Nº DO CARTÃO SUS",
+        ],
+    )
+
+    extracted = {"aluno_id": "", "aluno_nis": "", "aluno_cartao_sus": ""}
+
+    explicit_labels_complete = all(index >= 0 for index in (id_index, nis_index, sus_index))
+    if explicit_labels_complete:
+        id_stop = nis_index if nis_index > id_index >= 0 else naturalidade_index
+        nis_stop = sus_index if sus_index > nis_index >= 0 else naturalidade_index
+        sus_stop = naturalidade_index
+
+        extracted["aluno_id"] = cleanup_value(value_after_label(ident_lines, id_index, id_stop))
+        extracted["aluno_nis"] = cleanup_value(value_after_label(ident_lines, nis_index, nis_stop))
+        extracted["aluno_cartao_sus"] = cleanup_value(value_after_label(ident_lines, sus_index, sus_stop))
+        return extracted
+
     raw_candidates: list[str] = []
     previous_folded = ""
     for line in ident_lines[social_index + 1 : naturalidade_index]:
@@ -874,7 +923,6 @@ def extract_header_numeric_fields(ident_lines: list[str]) -> dict[str, str]:
             continue
         raw_candidates.append(cleaned)
 
-    extracted = {"aluno_id": "", "aluno_nis": "", "aluno_cartao_sus": ""}
     digit_candidates: list[tuple[str, str]] = []
     seen_digits: set[str] = set()
     for candidate in raw_candidates:
