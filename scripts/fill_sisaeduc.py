@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import csv
@@ -246,19 +246,32 @@ def run_post_actions(
         if not isinstance(action, dict):
             continue
         action_type = action.get("type", "")
+        action_delay = float(action.get("delay", 0.5))
         if action_type == "press_home":
             pyautogui.press("home")
-            time.sleep(delay)
+            time.sleep(action_delay)
+        elif action_type == "press_key":
+            key = str(action.get("key", "")).strip()
+            if key:
+                pyautogui.press(key)
+                time.sleep(action_delay)
+        elif action_type == "hotkey":
+            keys = action.get("keys", [])
+            if isinstance(keys, list) and keys:
+                pyautogui.hotkey(*[str(key) for key in keys if str(key).strip()])
+                time.sleep(action_delay)
         elif action_type == "copy_column_to_clipboard":
             column = str(action.get("csv_column", "")).strip()
             if column:
                 copy_to_clipboard((row.get(column, "") or "").strip())
+                time.sleep(action_delay)
         elif action_type == "copy_value":
             copy_to_clipboard(str(action.get("value", "")))
+            time.sleep(action_delay)
         elif action_type == "sleep":
-            time.sleep(float(action.get("seconds", delay)))
+            time.sleep(float(action.get("seconds", action_delay)))
         else:
-            raise ValueError(f"post_action não suportada: {action_type}")
+            raise ValueError(f"post_action n?o suportada: {action_type}")
 
 
 def execute_entry(pyautogui: Any, row: dict[str, str], entry: dict[str, Any], value: str, delay: float) -> None:

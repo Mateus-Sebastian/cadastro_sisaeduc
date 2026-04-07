@@ -1,61 +1,231 @@
-{
+﻿{
   "description": "Ordem baseada na tela de cadastro mostrada no screenshot do Sisaeduc. Cada item representa uma parada de Tab a partir do primeiro campo Nome.",
   "fields": [
-    { "field_id": "nome", "csv_column": "aluno_nome", "action_type": "text" },
-    { "field_id": "telefone", "csv_column": "telefone_contato", "action_type": "text" },
-    { "field_id": "data_nascimento", "csv_column": "aluno_data_nascimento", "action_type": "text" },
-    { "field_id": "naturalidade", "csv_column": "aluno_naturalidade", "action_type": "text" },
-
-    { "field_id": "endereco", "csv_column": "aluno_endereco", "action_type": "text" },
-    { "field_id": "zona", "csv_column": "aluno_zona", "action_type": "choice", "choice_fallback": "type_value", "extra_tabs": 1 },
-    { "field_id": "sexo", "csv_column": "aluno_sexo", "action_type": "choice", "choice_fallback": "type_value", "extra_tabs": 1 },
-    { "field_id": "etnia", "csv_column": "aluno_cor_raca", "action_type": "choice", "choice_fallback": "type_value", "default": "Não declarada", "extra_tabs": 1 },
-
-    { "field_id": "nee", "csv_column": "pessoa_com_deficiencia", "action_type": "choice", "choice_fallback": "type_value", "default": "Não", "extra_tabs": 1 },
-    { "field_id": "id_censo", "csv_column": "aluno_id", "action_type": "text", "clear_first": true, "pause_after": 0.25 },
-    { "field_id": "nis", "csv_column": "aluno_nis", "action_type": "text", "pause_after": 0.25 },
-    { "field_id": "cartao_sus", "csv_column": "aluno_cartao_sus", "action_type": "text" },
-
-    { "field_id": "bolsa_familia", "csv_column": "bolsa_familia", "action_type": "choice", "choice_fallback": "type_value", "default": "Não", "extra_tabs": 1 },
-    { "field_id": "ponto_referencia", "csv_column": "ponto_referencia", "action_type": "text" },
-    { "field_id": "nome_social", "csv_column": "aluno_nome_social", "action_type": "text" },
-
-    { "field_id": "utiliza_transporte", "csv_column": "utiliza_transporte", "action_type": "choice", "choice_fallback": "type_value", "default": "Não", "extra_tabs": 1 },
-    { "field_id": "tipo_sanguineo", "action_type": "skip" },
-    { "field_id": "tem_alergias", "csv_column": "tem_alergias", "action_type": "choice", "choice_fallback": "type_value", "default": "Não", "extra_tabs": 1 },
-    { "field_id": "descricao_alergias", "csv_column": "alergias_descricao", "action_type": "text", "enabled_if_column_nonempty": "alergias_descricao" },
-
-    { "field_id": "vulnerabilidade_social", "csv_column": "vulnerabilidade_social", "action_type": "choice", "choice_fallback": "type_value", "default": "Não", "extra_tabs": 1 },
-
-    { "field_id": "nome_mae", "csv_column": "mae_nome", "action_type": "text" },
-    { "field_id": "profissao_mae", "csv_column": "mae_profissao", "action_type": "text" },
-    { "field_id": "rg_mae", "csv_column": "mae_rg", "action_type": "text" },
-
-    { "field_id": "nome_pai", "csv_column": "pai_nome", "action_type": "text" },
-    { "field_id": "profissao_pai", "csv_column": "pai_profissao", "action_type": "text" },
-    { "field_id": "rg_pai", "csv_column": "pai_rg", "action_type": "text" },
-
-    { "field_id": "outro_responsavel", "action_type": "skip", "tab_after": false },
-
-    { "field_id": "registro_nascimento_casamento", "csv_column": "certidao_numero", "action_type": "text" },
-    { "field_id": "titulo_eleitor", "action_type": "skip", "clear_first": true },
-    { "field_id": "situacao_militar", "action_type": "skip", "clear_first": true },
-    { "field_id": "rg_estudante", "action_type": "skip", "clear_first": true },
-    { "field_id": "cpf", "csv_column": "aluno_cpf", "action_type": "text" },
-
-    { "field_id": "tamanho_calca", "action_type": "skip", "clear_first": true },
-    { "field_id": "tamanho_camisa", "action_type": "skip", "clear_first": true },
-    { "field_id": "tamanho_calcado", "action_type": "skip", "clear_first": true },
-
+    {
+      "field_id": "nome",
+      "csv_column": "aluno_nome",
+      "action_type": "text"
+    },
+    {
+      "field_id": "telefone",
+      "csv_column": "telefone_contato",
+      "action_type": "text"
+    },
+    {
+      "field_id": "data_nascimento",
+      "csv_column": "aluno_data_nascimento",
+      "action_type": "text"
+    },
+    {
+      "field_id": "naturalidade",
+      "csv_column": "aluno_naturalidade",
+      "action_type": "text"
+    },
+    {
+      "field_id": "endereco",
+      "csv_column": "aluno_endereco",
+      "action_type": "text"
+    },
+    {
+      "field_id": "zona",
+      "csv_column": "aluno_zona",
+      "action_type": "choice",
+      "choice_fallback": "type_value",
+      "extra_tabs": 1
+    },
+    {
+      "field_id": "sexo",
+      "csv_column": "aluno_sexo",
+      "action_type": "choice",
+      "choice_fallback": "type_value",
+      "extra_tabs": 1
+    },
+    {
+      "field_id": "etnia",
+      "csv_column": "aluno_cor_raca",
+      "action_type": "choice",
+      "choice_fallback": "type_value",
+      "default": "Não declarada",
+      "extra_tabs": 1
+    },
+    {
+      "field_id": "nee",
+      "csv_column": "pessoa_com_deficiencia",
+      "action_type": "choice",
+      "choice_fallback": "type_value",
+      "default": "Não",
+      "extra_tabs": 1
+    },
+    {
+      "field_id": "id_censo",
+      "csv_column": "aluno_id",
+      "action_type": "text",
+      "clear_first": true,
+      "pause_after": 0.25
+    },
+    {
+      "field_id": "nis",
+      "csv_column": "aluno_nis",
+      "action_type": "text",
+      "pause_after": 0.25
+    },
+    {
+      "field_id": "cartao_sus",
+      "csv_column": "aluno_cartao_sus",
+      "action_type": "text"
+    },
+    {
+      "field_id": "bolsa_familia",
+      "csv_column": "bolsa_familia",
+      "action_type": "choice",
+      "choice_fallback": "type_value",
+      "default": "Não",
+      "extra_tabs": 1
+    },
+    {
+      "field_id": "ponto_referencia",
+      "csv_column": "ponto_referencia",
+      "action_type": "text"
+    },
+    {
+      "field_id": "nome_social",
+      "csv_column": "aluno_nome_social",
+      "action_type": "text"
+    },
+    {
+      "field_id": "utiliza_transporte",
+      "csv_column": "utiliza_transporte",
+      "action_type": "choice",
+      "choice_fallback": "type_value",
+      "default": "Não",
+      "extra_tabs": 1
+    },
+    {
+      "field_id": "tipo_sanguineo",
+      "action_type": "skip"
+    },
+    {
+      "field_id": "tem_alergias",
+      "csv_column": "tem_alergias",
+      "action_type": "choice",
+      "choice_fallback": "type_value",
+      "default": "Não",
+      "extra_tabs": 1
+    },
+    {
+      "field_id": "descricao_alergias",
+      "csv_column": "alergias_descricao",
+      "action_type": "text",
+      "enabled_if_column_nonempty": "alergias_descricao"
+    },
+    {
+      "field_id": "vulnerabilidade_social",
+      "csv_column": "vulnerabilidade_social",
+      "action_type": "choice",
+      "choice_fallback": "type_value",
+      "default": "Não",
+      "extra_tabs": 1
+    },
+    {
+      "field_id": "nome_mae",
+      "csv_column": "mae_nome",
+      "action_type": "text"
+    },
+    {
+      "field_id": "profissao_mae",
+      "csv_column": "mae_profissao",
+      "action_type": "text"
+    },
+    {
+      "field_id": "rg_mae",
+      "csv_column": "mae_rg",
+      "action_type": "text"
+    },
+    {
+      "field_id": "nome_pai",
+      "csv_column": "pai_nome",
+      "action_type": "text"
+    },
+    {
+      "field_id": "profissao_pai",
+      "csv_column": "pai_profissao",
+      "action_type": "text"
+    },
+    {
+      "field_id": "rg_pai",
+      "csv_column": "pai_rg",
+      "action_type": "text"
+    },
+    {
+      "field_id": "outro_responsavel",
+      "action_type": "skip",
+      "tab_after": false
+    },
+    {
+      "field_id": "registro_nascimento_casamento",
+      "csv_column": "certidao_numero",
+      "action_type": "text"
+    },
+    {
+      "field_id": "titulo_eleitor",
+      "action_type": "skip",
+      "clear_first": true
+    },
+    {
+      "field_id": "situacao_militar",
+      "action_type": "skip",
+      "clear_first": true
+    },
+    {
+      "field_id": "rg_estudante",
+      "action_type": "skip",
+      "clear_first": true
+    },
+    {
+      "field_id": "cpf",
+      "csv_column": "aluno_cpf",
+      "action_type": "text"
+    },
+    {
+      "field_id": "tamanho_calca",
+      "action_type": "skip",
+      "clear_first": true
+    },
+    {
+      "field_id": "tamanho_camisa",
+      "action_type": "skip",
+      "clear_first": true
+    },
+    {
+      "field_id": "tamanho_calcado",
+      "action_type": "skip",
+      "clear_first": true
+    },
     {
       "field_id": "serie_inicial",
       "csv_column": "matricula_etapa_serie",
       "action_type": "choice",
       "choice_fallback": "type_value",
-      "extra_tabs": 3,
+      "extra_tabs": 2,
       "post_actions": [
-        { "type": "press_home" },
-        { "type": "copy_column_to_clipboard", "csv_column": "aluno_nome" }
+        {
+          "type": "press_key",
+          "key": "space",
+          "delay": 0.5
+        },
+        {
+          "type": "hotkey",
+          "keys": [
+            "alt",
+            "tab"
+          ],
+          "delay": 0.5
+        },
+        {
+          "type": "press_key",
+          "key": "enter",
+          "delay": 0.5
+        }
       ]
     }
   ]

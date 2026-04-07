@@ -296,6 +296,29 @@ def cleanup_point_of_reference(value: str) -> str:
     return cleaned
 
 
+def is_plausible_name_text(value: str) -> bool:
+    cleaned = cleanup_value(value)
+    if not cleaned:
+        return False
+    digits = re.sub(r"\D", "", cleaned)
+    if digits:
+        return False
+    letters = [ch for ch in cleaned if ch.isalpha()]
+    if len(letters) < 3:
+        return False
+    folded = fold_text(cleaned)
+    forbidden_tokens = {
+        "NO DO ID DO ALUNO",
+        "NUMERO DE IDENTIFICACAO SOCIAL",
+        "N DO CARTAO SUS",
+        "NO DO CARTAO SUS",
+        "NATURAL DE",
+        "UF",
+        "NACIONALIDADE",
+    }
+    return not any(token in folded for token in forbidden_tokens)
+
+
 def strip_parenthetical_text(value: str) -> str:
     return normalize_text(re.sub(r"\s*\([^)]*\)", "", value or ""))
 
@@ -383,15 +406,13 @@ def normalize_phone(value: str) -> str:
         return ""
     if digits.startswith("55") and len(digits) > 11:
         digits = digits[2:]
+    if len(digits) < 8:
+        return ""
     if len(digits) in {8, 9}:
         digits = "83" + digits
-    if len(digits) < 10:
-        return digits
-    if len(digits) > 11:
-        digits = digits[-11:]
-    if len(digits) == 11:
-        return f"({digits[:2]}) {digits[2:7]}-{digits[7:]}"
-    return f"({digits[:2]}) {digits[2:6]}-{digits[6:]}"
+    if len(digits) != 11:
+        return ""
+    return f"({digits[:2]}) {digits[2:7]}-{digits[7:]}"
 
 
 def normalize_address(value: str) -> str:
@@ -504,6 +525,9 @@ def normalize_grade(value: str) -> str:
         return "Creche 2"
     if folded.startswith("MATERNAL"):
         return "Creche 2"
+    ano_match = re.fullmatch(r"([1-9])\s*(?:O)?\s*ANO", folded)
+    if ano_match:
+        return f"{ano_match.group(1)}º ano do ensino fundamental"
     return smart_title(value)
 
 
@@ -538,6 +562,35 @@ def preferred_phone(*phones: str) -> str:
     return ""
 
 
+def is_valid_cns(value: str) -> bool:
+    digits = re.sub(r"\D", "", value or "")
+    if len(digits) != 15:
+        return False
+
+    if digits[0] in {"1", "2"}:
+        pis = digits[:11]
+        total = sum(int(digit) * weight for digit, weight in zip(pis, range(15, 4, -1)))
+        remainder = total % 11
+        dv = 11 - remainder
+
+        if dv == 11:
+            dv = 0
+        if dv == 10:
+            total = sum(int(digit) * weight for digit, weight in zip(pis, range(15, 4, -1))) + 2
+            remainder = total % 11
+            dv = 11 - remainder
+            result = f"{pis}001{int(dv)}"
+        else:
+            result = f"{pis}000{int(dv)}"
+        return digits == result
+
+    if digits[0] in {"5", "7", "8", "9"}:
+        total = sum(int(digit) * weight for digit, weight in zip(digits, range(15, 0, -1)))
+        return total % 11 == 0
+
+    return False
+
+
 def normalize_sus_card(value: str) -> str:
     cleaned = cleanup_value(value)
     if not cleaned:
@@ -545,7 +598,39 @@ def normalize_sus_card(value: str) -> str:
     digits = re.sub(r"\D", "", cleaned)
     if len(digits) != 15:
         return ""
+    if not is_valid_cns(digits):
+        return ""
     return f"{digits[:3]} {digits[3:7]} {digits[7:11]} {digits[11:]}"
+
+
+def normalize_cpf(value: str) -> str:
+    cleaned = cleanup_value(value)
+    if not cleaned:
+        return ""
+    digits = re.sub(r"\D", "", cleaned)
+    if len(digits) != 11:
+        return ""
+    return f"{digits[:3]}.{digits[3:6]}.{digits[6:9]}-{digits[9:]}"
+
+
+def normalize_student_id(value: str) -> str:
+    cleaned = cleanup_value(value)
+    if not cleaned:
+        return ""
+    digits = re.sub(r"\D", "", cleaned)
+    if len(digits) < 11 or len(digits) > 13:
+        return ""
+    return digits
+
+
+def normalize_nis(value: str) -> str:
+    cleaned = cleanup_value(value)
+    if not cleaned:
+        return ""
+    digits = re.sub(r"\D", "", cleaned)
+    if len(digits) < 10 or len(digits) > 16:
+        return ""
+    return digits
 
 
 def format_record(record: dict[str, str]) -> dict[str, str]:
@@ -611,7 +696,19 @@ def format_record(record: dict[str, str]) -> dict[str, str]:
         record[field] = normalize_phone(record.get(field, ""))
     for field in upper_fields:
         record[field] = cleanup_value(record.get(field, "")).upper()
+    record["aluno_cpf"] = normalize_cpf(record.get("aluno_cpf", ""))
+    record["aluno_id"] = normalize_student_id(record.get("aluno_id", ""))
+    record["aluno_nis"] = normalize_nis(record.get("aluno_nis", ""))
     record["aluno_cartao_sus"] = normalize_sus_card(record.get("aluno_cartao_sus", ""))
+
+    cpf_digits = re.sub(r"\D", "", record.get("aluno_cpf", ""))
+    sus_digits = re.sub(r"\D", "", record.get("aluno_cartao_sus", ""))
+    if record["aluno_nis"] and (
+        record["aluno_nis"] == cpf_digits
+        or record["aluno_nis"] == record["aluno_id"]
+        or record["aluno_nis"] == sus_digits
+    ):
+        record["aluno_nis"] = ""
 
     record["alergias_descricao"] = extract_alergias(
         record.get("deficiencia_tipos", ""),
@@ -691,8 +788,22 @@ def find_index(lines: list[str], target: str, start: int = 0) -> int:
     return -1
 
 
+def find_index_prefix(lines: list[str], target: str, start: int = 0) -> int:
+    folded_target = fold_text(normalize_label_text(target))
+    for index in range(start, len(lines)):
+        if fold_text(normalize_label_text(lines[index])).startswith(folded_target):
+            return index
+    return -1
+
+
 def find_any_index(lines: list[str], targets: Iterable[str], start: int = 0) -> int:
     indexes = [find_index(lines, target, start=start) for target in targets]
+    indexes = [index for index in indexes if index >= 0]
+    return min(indexes) if indexes else -1
+
+
+def find_any_index_prefix(lines: list[str], targets: Iterable[str], start: int = 0) -> int:
+    indexes = [find_index_prefix(lines, target, start=start) for target in targets]
     indexes = [index for index in indexes if index >= 0]
     return min(indexes) if indexes else -1
 
@@ -730,6 +841,92 @@ def next_value(lines: list[str], start_index: int, stop_index: int | None = None
         if len(values) >= max_lines:
             break
     return " ".join(values).strip()
+
+
+def value_after_label(lines: list[str], start_index: int, stop_index: int | None = None, max_lines: int = 1) -> str:
+    if start_index < 0:
+        return ""
+    line = cleanup_value(lines[start_index])
+    if ":" in line:
+        inline_value = cleanup_value(line.split(":", 1)[1])
+        if inline_value and not is_label_line(inline_value):
+            return inline_value
+    return next_value(lines, start_index, stop_index, max_lines=max_lines)
+
+
+def extract_header_numeric_fields(ident_lines: list[str]) -> dict[str, str]:
+    social_index = find_index_prefix(ident_lines, "NOME SOCIAL:")
+    naturalidade_index = find_index_prefix(ident_lines, "NATURAL DE:")
+    if social_index < 0 or naturalidade_index < 0 or naturalidade_index <= social_index:
+        return {"aluno_id": "", "aluno_nis": "", "aluno_cartao_sus": ""}
+
+    raw_candidates: list[str] = []
+    previous_folded = ""
+    for line in ident_lines[social_index + 1 : naturalidade_index]:
+        cleaned = cleanup_value(line)
+        if not cleaned:
+            continue
+        folded = fold_text(cleaned)
+        if folded == previous_folded:
+            continue
+        previous_folded = folded
+        if is_label_line(cleaned):
+            continue
+        raw_candidates.append(cleaned)
+
+    extracted = {"aluno_id": "", "aluno_nis": "", "aluno_cartao_sus": ""}
+    digit_candidates: list[tuple[str, str]] = []
+    seen_digits: set[str] = set()
+    for candidate in raw_candidates:
+        digits = re.sub(r"\D", "", candidate)
+        if not digits or digits in seen_digits:
+            continue
+        seen_digits.add(digits)
+        digit_candidates.append((candidate, digits))
+        if len(digits) == 15 and not extracted["aluno_cartao_sus"]:
+            extracted["aluno_cartao_sus"] = candidate
+        elif len(digits) in {12, 13} and not extracted["aluno_id"]:
+            extracted["aluno_id"] = candidate
+        elif len(digits) == 11 and not extracted["aluno_nis"]:
+            extracted["aluno_nis"] = candidate
+
+    # Some scans lose the ID/NIS/SUS labels but keep the values in order after
+    # "NOME SOCIAL": first ID, then NIS, then SUS.
+    if digit_candidates:
+        if not extracted["aluno_id"] and len(digit_candidates) >= 1:
+            first_candidate, first_digits = digit_candidates[0]
+            if len(first_digits) in {11, 12, 13}:
+                extracted["aluno_id"] = first_candidate
+        if not extracted["aluno_nis"] and len(digit_candidates) >= 2:
+            second_candidate, second_digits = digit_candidates[1]
+            if 10 <= len(second_digits) <= 16:
+                extracted["aluno_nis"] = second_candidate
+        if not extracted["aluno_cartao_sus"] and len(digit_candidates) >= 3:
+            third_candidate, third_digits = digit_candidates[2]
+            if len(third_digits) == 15:
+                extracted["aluno_cartao_sus"] = third_candidate
+    return extracted
+
+
+def extract_student_cpf(ident_lines: list[str], zona_index: int) -> str:
+    cpf_index = find_index_prefix(ident_lines, "CPF DO ALUNO:")
+    cpf_value = cleanup_value(value_after_label(ident_lines, cpf_index, zona_index))
+    if cpf_value:
+        return cpf_value
+
+    search_start = find_any_index_prefix(
+        ident_lines,
+        ["CPF DO ALUNO:", "ÓRGÃO EMISSOR:", "ORGAO EMISSOR:", "RG DO ALUNO:"],
+    )
+    if search_start < 0:
+        return ""
+    limit = len(ident_lines) if zona_index < 0 else zona_index
+    for line in ident_lines[search_start + 1 : limit]:
+        cleaned = cleanup_value(line)
+        digits = re.sub(r"\D", "", cleaned)
+        if len(digits) == 11:
+            return cleaned
+    return ""
 
 
 def lines_between(lines: list[str], start_label: str, end_label: str | None = None, start: int = 0) -> list[str]:
@@ -777,7 +974,7 @@ def section_slice(lines: list[str], start_label: str, end_label: str | None) -> 
 
 
 def parse_person_block(lines: list[str], name_label: str, whatsapp_label: str | None = None) -> dict[str, str]:
-    name_index = find_index(lines, name_label)
+    name_index = find_index_prefix(lines, name_label)
     if name_index < 0:
         return {
             "nome": "",
@@ -797,30 +994,30 @@ def parse_person_block(lines: list[str], name_label: str, whatsapp_label: str | 
 
     positions = {
         "nome": name_index,
-        "municipio": find_index(lines, "MUNICÍPIO:", start=name_index),
-        "endereco": find_index(lines, "ENDEREÇO:", start=name_index),
-        "uf": find_index(lines, "UF:", start=name_index),
-        "telefone": find_any_index(lines, ["TELEFONE:", "TELEFONE", "WHATSAPP:"], start=name_index),
-        "rg": find_index(lines, "RG:", start=name_index),
-        "orgao_emissor": find_index(lines, "ÓRGÃO EMISSOR:", start=name_index),
-        "data_emissao": find_any_index(lines, ["DATA DA EMISSÃO:", "DATA DA EMISSÃO"], start=name_index),
-        "cpf": find_any_index(lines, ["CPF:", "CPF DO ALUNO:"], start=name_index),
-        "profissao": find_index(lines, "PROFISSÃO:", start=name_index),
+        "municipio": find_index_prefix(lines, "MUNICÍPIO:", start=name_index),
+        "endereco": find_index_prefix(lines, "ENDEREÇO:", start=name_index),
+        "uf": find_index_prefix(lines, "UF:", start=name_index),
+        "telefone": find_any_index_prefix(lines, ["TELEFONE:", "TELEFONE", "WHATSAPP:"], start=name_index),
+        "rg": find_index_prefix(lines, "RG:", start=name_index),
+        "orgao_emissor": find_any_index_prefix(lines, ["ÓRGÃO EMISSOR:", "ORGAO EMISSOR:"], start=name_index),
+        "data_emissao": find_any_index_prefix(lines, ["DATA DA EMISSÃO:", "DATA DA EMISSÃO", "DATA DE EMISSÃO:", "DATA DE EMISSÃO"], start=name_index),
+        "cpf": find_any_index_prefix(lines, ["CPF:", "CPF DO ALUNO:"], start=name_index),
+        "profissao": find_index_prefix(lines, "PROFISSÃO:", start=name_index),
         "whatsapp": "",
         "parentesco": "",
         "email": "",
     }
 
     if whatsapp_label:
-        positions["whatsapp"] = find_index(lines, whatsapp_label, start=name_index)
-        positions["parentesco"] = find_index(lines, "GRAU DE PARENTESCO:", start=name_index)
-        positions["email"] = find_index(lines, "E-MAIL:", start=name_index)
+        positions["whatsapp"] = find_index_prefix(lines, whatsapp_label, start=name_index)
+        positions["parentesco"] = find_index_prefix(lines, "GRAU DE PARENTESCO:", start=name_index)
+        positions["email"] = find_index_prefix(lines, "E-MAIL:", start=name_index)
 
     ordered = sorted((index, key) for key, index in positions.items() if isinstance(index, int) and index >= 0)
     data: dict[str, str] = {}
     for order_index, (line_index, key) in enumerate(ordered):
         next_stop = ordered[order_index + 1][0] if order_index + 1 < len(ordered) else None
-        data[key] = next_value(lines, line_index, next_stop)
+        data[key] = value_after_label(lines, line_index, next_stop)
 
     return {key: cleanup_value(data.get(key, "")) for key in positions}
 
@@ -875,12 +1072,10 @@ def extract_certidao_emissao_modelo(ident_lines: list[str]) -> str:
 
 
 def extract_certidao_numero_bloco(ident_lines: list[str]) -> str:
-    start_index = find_index(ident_lines, "CERTIDÃO DE")
-    if start_index < 0:
-        start_index = find_index(ident_lines, "(MatrÃ­cula-Modelo Novo)")
+    start_index = find_any_index(ident_lines, ["CERTIDAO DE", "(MATRICULA-MODELO NOVO)"])
     if start_index < 0:
         return ""
-    stop_index = find_index(ident_lines, "NOME DO CARTÃ“RIO:", start=start_index + 1)
+    stop_index = find_any_index(ident_lines, ["NOME DO CARTORIO:", "NOME DO CARTORIO"], start=start_index + 1)
     if stop_index < 0:
         stop_index = len(ident_lines)
     candidates: list[str] = []
@@ -889,9 +1084,28 @@ def extract_certidao_numero_bloco(ident_lines: list[str]) -> str:
         if len(re.sub(r"\D", "", cleaned)) >= 20:
             candidates.append(cleaned)
     unique_candidates = list(dict.fromkeys(candidates))
-    if not unique_candidates:
-        return ""
-    return min(unique_candidates, key=len)
+    if unique_candidates:
+        return min(unique_candidates, key=len)
+
+    parts: list[str] = []
+    for line in ident_lines[start_index + 1 : stop_index]:
+        cleaned = cleanup_value(line)
+        if not cleaned:
+            continue
+        if re.fullmatch(r"\d{2}/\d{2}/\d{4}", cleaned):
+            break
+        folded = fold_text(cleaned)
+        if folded in {"(MATRICULA-MODELO NOVO)", "NASCIMENTO:", "/"}:
+            continue
+        if is_label_line(cleaned):
+            continue
+        parts.append(cleaned)
+        if len(parts) >= 3:
+            break
+
+    if len(parts) >= 3:
+        return f"Termo: {parts[0]} Folha: {parts[1]} Livro: {parts[2]}"
+    return ""
 
 
 def extract_certidao_emissao_bloco(ident_lines: list[str]) -> str:
@@ -969,12 +1183,26 @@ def parse_student_docx(docx_path: Path, base_dir: Path | None = None) -> dict[st
         raise ValueError("Layout de ficha não suportado pelo extrator atual.")
 
     ident_lines = section_slice(lines, "2 - DADOS DE IDENTIFICAÇÃO DO ALUNO", "3 - DADOS DO RESPONSÁVEL PELO ALUNO")
+    if not ident_lines:
+        ident_start = find_index_prefix(lines, "NOME COMPLETO DO ALUNO:")
+        ident_end = find_any_index(
+            lines,
+            [
+                "3 - DADOS DO RESPONSÁVEL PELO ALUNO",
+                "3 - DADOS DO RESPONSAVEL PELO ALUNO",
+                "NOME DO RESPONSÁVEL:",
+                "NOME DO RESPONSAVEL:",
+            ],
+            start=ident_start + 1 if ident_start >= 0 else 0,
+        )
+        if ident_start >= 0:
+            ident_lines = lines[ident_start : ident_end if ident_end >= 0 else len(lines)]
     resp_lines = section_slice(lines, "3 - DADOS DO RESPONSÁVEL PELO ALUNO", "4 - DADOS DA MATRÍCULA DO ALUNO")
     matricula_lines = section_slice(lines, "4 - DADOS DA MATRÍCULA DO ALUNO", "5 - DADOS COMPLEMENTARES DO ALUNO")
     comp_lines = section_slice(lines, "5 - DADOS COMPLEMENTARES DO ALUNO", None)
 
-    mae_start = find_index(ident_lines, "NOME DA MÃE:")
-    pai_start = find_index(ident_lines, "NOME DO PAI:")
+    mae_start = find_index_prefix(ident_lines, "NOME DA MÃE:")
+    pai_start = find_index_prefix(ident_lines, "NOME DO PAI:")
     mae_lines = ident_lines[mae_start:pai_start] if mae_start >= 0 and pai_start >= 0 else []
     pai_lines = ident_lines[pai_start:] if pai_start >= 0 else []
 
@@ -982,9 +1210,9 @@ def parse_student_docx(docx_path: Path, base_dir: Path | None = None) -> dict[st
     pai = parse_person_block(pai_lines, "NOME DO PAI:")
     responsavel = parse_person_block(resp_lines, "NOME DO RESPONSÁVEL:", whatsapp_label="WHATSAPP:")
 
-    naturalidade_index = find_index(ident_lines, "NATURAL DE:")
-    uf_naturalidade_index = find_index(ident_lines, "UF:", start=naturalidade_index if naturalidade_index >= 0 else 0)
-    nacionalidade_index = find_index(ident_lines, "NACIONALIDADE:")
+    naturalidade_index = find_index_prefix(ident_lines, "NATURAL DE:")
+    uf_naturalidade_index = find_index_prefix(ident_lines, "UF:", start=naturalidade_index if naturalidade_index >= 0 else 0)
+    nacionalidade_index = find_index_prefix(ident_lines, "NACIONALIDADE:")
     cartorio_index = find_index(ident_lines, "NOME DO CARTÓRIO:")
     municipio_certidao_index = find_any_index(ident_lines, ["MUNICÍPIO:,", "MUNICÍPIO:"], start=cartorio_index if cartorio_index >= 0 else 0)
     uf_certidao_index = find_index(ident_lines, "UF:", start=municipio_certidao_index if municipio_certidao_index >= 0 else 0)
@@ -1041,66 +1269,73 @@ def parse_student_docx(docx_path: Path, base_dir: Path | None = None) -> dict[st
     certidao_municipio = cleanup_value(next_value(ident_lines, municipio_certidao_index, uf_certidao_index))
 
     record = {column: "" for column in CSV_COLUMNS}
-    extracted_student_name = cleanup_value(next_value(ident_lines, find_index(ident_lines, "NOME COMPLETO DO ALUNO:")))
+    extracted_student_name = cleanup_value(value_after_label(ident_lines, find_index_prefix(ident_lines, "NOME COMPLETO DO ALUNO:")))
     filename_student_name = extract_name_from_filename(docx_path)
     use_filename_student_name = should_replace_student_name_with_filename(extracted_student_name, filename_student_name)
     record["source_file"] = str(docx_path.relative_to(base_dir) if base_dir else docx_path)
     record["aluno_nome_original"] = extracted_student_name
-    record["aluno_nome_corrigido_por_arquivo"] = "Sim" if use_filename_student_name else "Não"
+    record["aluno_nome_corrigido_por_arquivo"] = "Sim" if use_filename_student_name else "N?o"
     record["aluno_nome"] = filename_student_name if use_filename_student_name else extracted_student_name
-    record["aluno_data_nascimento"] = cleanup_value(next_value(ident_lines, find_index(ident_lines, "DATA DE NASCIMENTO:")))
-    record["aluno_nome_social"] = cleanup_value(next_value(ident_lines, find_index(ident_lines, "NOME SOCIAL:")))
-    record["aluno_id"] = cleanup_value(next_value(ident_lines, find_any_index(ident_lines, ["N DO ID DO ALUNO :", "NO DO ID DO ALUNO :"])))
-    record["aluno_nis"] = cleanup_value(
-        next_value(
+    record["aluno_data_nascimento"] = cleanup_value(value_after_label(ident_lines, find_index_prefix(ident_lines, "DATA DE NASCIMENTO:")))
+    aluno_nome_social = cleanup_value(value_after_label(ident_lines, find_index_prefix(ident_lines, "NOME SOCIAL:")))
+    record["aluno_nome_social"] = aluno_nome_social if is_plausible_name_text(aluno_nome_social) else ""
+    header_numeric_fields = extract_header_numeric_fields(ident_lines)
+    record["aluno_id"] = cleanup_value(
+        value_after_label(
             ident_lines,
-            find_any_index(
+            find_any_index_prefix(ident_lines, ["N DO ID DO ALUNO :", "NO DO ID DO ALUNO :"]),
+        )
+    ) or header_numeric_fields["aluno_id"]
+    record["aluno_nis"] = cleanup_value(
+        value_after_label(
+            ident_lines,
+            find_any_index_prefix(
                 ident_lines,
                 [
                     "NUMERO DE IDENTIFICACAO SOCIAL (NIS):",
                     "NUMERO DE IDENTIFICACAO SOCIAL (NIS)",
-                    "NÚMERO DE IDENTIFICAÇÃO SOCIAL (NIS):",
-                    "NÚMERO DE IDENTIFICAÇÃO SOCIAL (NIS)",
+                    "N?MERO DE IDENTIFICA??O SOCIAL (NIS):",
+                    "N?MERO DE IDENTIFICA??O SOCIAL (NIS)",
                 ],
             ),
         )
-    )
+    ) or header_numeric_fields["aluno_nis"]
     record["aluno_cartao_sus"] = cleanup_value(
-        next_value(
+        value_after_label(
             ident_lines,
-            find_any_index(
+            find_any_index_prefix(
                 ident_lines,
                 [
                     "NO DO CARTAO SUS:",
                     "NO DO CARTAO SUS",
                     "N DO CARTAO SUS:",
                     "N DO CARTAO SUS",
-                    "Nº DO CARTÃO SUS:",
-                    "No DO CARTÃO SUS:",
+                    "N? DO CART?O SUS:",
+                    "No DO CART?O SUS:",
                 ],
             ),
         )
-    )
+    ) or header_numeric_fields["aluno_cartao_sus"]
     if not record["aluno_cartao_sus"]:
         record["aluno_cartao_sus"] = cleanup_value(
-            next_value(
+            value_after_label(
                 ident_lines,
-                find_any_index(
+                find_any_index_prefix(
                     ident_lines,
                     [
                         "NO DO CARTAO SUS:",
                         "NO DO CARTAO SUS",
                         "N DO CARTAO SUS:",
                         "N DO CARTAO SUS",
-                        "Nº DO CARTÃO SUS:",
-                        "No DO CARTÃO SUS:",
+                        "N? DO CART?O SUS:",
+                        "No DO CART?O SUS:",
                     ],
                 ),
             )
-        )
-    record["aluno_naturalidade"] = cleanup_value(next_value(ident_lines, naturalidade_index, uf_naturalidade_index))
-    record["aluno_uf_naturalidade"] = cleanup_value(next_value(ident_lines, uf_naturalidade_index, nacionalidade_index))
-    record["aluno_nacionalidade"] = cleanup_value(next_value(ident_lines, nacionalidade_index))
+        ) or header_numeric_fields["aluno_cartao_sus"]
+    record["aluno_naturalidade"] = cleanup_value(value_after_label(ident_lines, naturalidade_index, uf_naturalidade_index))
+    record["aluno_uf_naturalidade"] = cleanup_value(value_after_label(ident_lines, uf_naturalidade_index, nacionalidade_index))
+    record["aluno_nacionalidade"] = cleanup_value(value_after_label(ident_lines, nacionalidade_index))
     record["aluno_sexo"] = parse_marked_option(sexo_block, ["Masculino", "Feminino"])
     record["aluno_cor_raca"] = parse_marked_option(cor_block, ["Branca", "Preta", "Parda", "Amarela", "Indígena"])
     record["certidao_tipo"] = parse_marked_option(certidao_block, ["Nascimento", "Casamento"])
@@ -1109,7 +1344,7 @@ def parse_student_docx(docx_path: Path, base_dir: Path | None = None) -> dict[st
     record["certidao_cartorio"] = cleanup_value(next_value(ident_lines, cartorio_index, municipio_certidao_index))
     record["certidao_municipio"] = strip_trailing_uf(certidao_municipio)
     record["certidao_uf"] = cleanup_value(next_value(ident_lines, uf_certidao_index))
-    record["aluno_cpf"] = cleanup_value(next_value(ident_lines, find_index(ident_lines, "CPF DO ALUNO:")))
+    record["aluno_cpf"] = cleanup_value(extract_student_cpf(ident_lines, zona_index))
     record["aluno_zona"] = parse_marked_option(zona_block, ["Urbana", "Rural"])
     record["aluno_endereco"] = cleanup_value(next_value(ident_lines, endereco_index, cep_index))
     record["aluno_municipio"] = cleanup_value(next_value(ident_lines, municipio_index, aluno_uf_index))
