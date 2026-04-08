@@ -175,6 +175,7 @@ SERIE_OPTIONS = [
     "Berçário",
     "Berçário A",
     "Berçário B",
+    "Maternal",
     "Maternal I",
     "Maternal II",
     "Pré I",
@@ -406,8 +407,14 @@ def normalize_phone(value: str) -> str:
         return ""
     if digits.startswith("55") and len(digits) > 11:
         digits = digits[2:]
+    if len(digits) >= 4 and digits[:2] == digits[2:4]:
+        digits = digits[2:]
+    if len(digits) == 12 and digits[2] == "9" and digits[3] == "9":
+        digits = digits[:3] + digits[4:]
     if len(digits) < 8:
         return ""
+    if len(digits) == 10:
+        digits = digits[:2] + "9" + digits[2:]
     if len(digits) in {8, 9}:
         digits = "83" + digits
     if len(digits) != 11:
@@ -670,6 +677,22 @@ def normalize_nis(value: str) -> str:
     return digits
 
 
+def normalize_date(value: str) -> str:
+    cleaned = cleanup_value(value)
+    if not cleaned:
+        return ""
+    cleaned = re.sub(r"\s*/\s*", "/", cleaned)
+    match = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", cleaned)
+    if not match:
+        return cleaned
+    day, month, year = match.groups()
+    try:
+        normalized = datetime(int(year), int(month), int(day))
+    except ValueError:
+        return cleaned
+    return normalized.strftime("%d/%m/%Y")
+
+
 def format_record(record: dict[str, str]) -> dict[str, str]:
     name_fields = {
         "aluno_nome_original",
@@ -712,6 +735,12 @@ def format_record(record: dict[str, str]) -> dict[str, str]:
     }
     phone_fields = {"telefone_contato", "mae_telefone", "pai_telefone", "responsavel_whatsapp"}
     upper_fields = {"aluno_uf_naturalidade", "certidao_uf", "aluno_uf", "mae_uf", "pai_uf", "responsavel_uf"}
+    date_fields = {
+        "aluno_data_nascimento",
+        "certidao_emissao",
+        "mae_data_emissao",
+        "pai_data_emissao",
+    }
 
     for field in name_fields:
         record[field] = smart_title(strip_parenthetical_text(record.get(field, "")))
@@ -733,6 +762,8 @@ def format_record(record: dict[str, str]) -> dict[str, str]:
         record[field] = normalize_phone(record.get(field, ""))
     for field in upper_fields:
         record[field] = cleanup_value(record.get(field, "")).upper()
+    for field in date_fields:
+        record[field] = normalize_date(record.get(field, ""))
     record["aluno_cpf"] = normalize_cpf(record.get("aluno_cpf", ""))
     record["aluno_id"] = normalize_student_id(record.get("aluno_id", ""))
     record["aluno_nis"] = normalize_nis(record.get("aluno_nis", ""))
@@ -1286,6 +1317,8 @@ def parse_student_docx(docx_path: Path, base_dir: Path | None = None) -> dict[st
             or "EDUCAÇÃO INFANTIL - 2025" in line
             or "FUNDAMENTAL II - 2026" in line
             or "FUNDAMENTAL II - 2025" in line
+            or "FUNDAMENTAL / ANOS INICIAIS - 2026" in line
+            or "FUNDAMENTAL / ANOS INICIAIS - 2025" in line
         )
         for line in lines[:40]
     ):
