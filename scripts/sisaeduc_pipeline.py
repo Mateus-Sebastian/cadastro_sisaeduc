@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from datetime import date, datetime
 from difflib import SequenceMatcher
@@ -603,12 +603,35 @@ def normalize_sus_card(value: str) -> str:
     return f"{digits[:3]} {digits[3:7]} {digits[7:11]} {digits[11:]}"
 
 
+def is_valid_cpf(value: str) -> bool:
+    digits = re.sub(r"\D", "", value or "")
+    if len(digits) != 11:
+        return False
+    if len(set(digits)) == 1:
+        return False
+
+    total = sum(int(digit) * weight for digit, weight in zip(digits[:9], range(10, 1, -1)))
+    dv1 = (total * 10) % 11
+    if dv1 == 10:
+        dv1 = 0
+    if int(digits[9]) != dv1:
+        return False
+
+    total = sum(int(digit) * weight for digit, weight in zip(digits[:10], range(11, 1, -1)))
+    dv2 = (total * 10) % 11
+    if dv2 == 10:
+        dv2 = 0
+    return int(digits[10]) == dv2
+
+
 def normalize_cpf(value: str) -> str:
     cleaned = cleanup_value(value)
     if not cleaned:
         return ""
     digits = re.sub(r"\D", "", cleaned)
     if len(digits) != 11:
+        return ""
+    if not is_valid_cpf(digits):
         return ""
     return f"{digits[:3]}.{digits[3:6]}.{digits[6:9]}-{digits[9:]}"
 
@@ -623,12 +646,26 @@ def normalize_student_id(value: str) -> str:
     return digits
 
 
+def is_valid_nis(value: str) -> bool:
+    digits = re.sub(r"\D", "", value or "")
+    if len(digits) != 11:
+        return False
+    weights = [3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    total = sum(int(digit) * weight for digit, weight in zip(digits[:10], weights))
+    dv = 11 - (total % 11)
+    if dv in {10, 11}:
+        dv = 0
+    return int(digits[-1]) == dv
+
+
 def normalize_nis(value: str) -> str:
     cleaned = cleanup_value(value)
     if not cleaned:
         return ""
     digits = re.sub(r"\D", "", cleaned)
-    if len(digits) < 10 or len(digits) > 16:
+    if len(digits) != 11:
+        return ""
+    if not is_valid_nis(digits):
         return ""
     return digits
 
@@ -958,19 +995,43 @@ def extract_header_numeric_fields(ident_lines: list[str]) -> dict[str, str]:
 
 def extract_student_cpf(ident_lines: list[str], zona_index: int) -> str:
     cpf_index = find_index_prefix(ident_lines, "CPF DO ALUNO:")
-    cpf_value = cleanup_value(value_after_label(ident_lines, cpf_index, zona_index))
+    stop_candidates = [
+        index
+        for index in (
+            zona_index,
+            find_index_prefix(ident_lines, "ZONA RESIDENCIAL:"),
+            find_index_prefix(ident_lines, "MUNIC?PIO:"),
+            find_index_prefix(ident_lines, "MUNICIPIO:"),
+            find_index_prefix(ident_lines, "ENDERE?O:"),
+            find_index_prefix(ident_lines, "ENDERECO:"),
+            find_index_prefix(ident_lines, "CEP:"),
+            find_index_prefix(ident_lines, "NOME DA M?E:"),
+            find_index_prefix(ident_lines, "NOME DA MAE:"),
+            find_index_prefix(ident_lines, "NOME DO PAI:"),
+            find_index_prefix(ident_lines, "3 - DADOS DO RESPONS?VEL PELO ALUNO"),
+            find_index_prefix(ident_lines, "3 - DADOS DO RESPONSAVEL PELO ALUNO"),
+        )
+        if index >= 0 and index > cpf_index
+    ]
+    stop_index = min(stop_candidates) if stop_candidates else None
+
+    cpf_value = cleanup_value(value_after_label(ident_lines, cpf_index, stop_index))
     if cpf_value:
-        return cpf_value
+        digits = re.sub(r"\D", "", cpf_value)
+        if len(digits) == 11 and "TELEFONE" not in fold_text(cpf_value):
+            return cpf_value
 
     search_start = find_any_index_prefix(
         ident_lines,
-        ["CPF DO ALUNO:", "ÓRGÃO EMISSOR:", "ORGAO EMISSOR:", "RG DO ALUNO:"],
+        ["CPF DO ALUNO:", "?RG?O EMISSOR:", "ORGAO EMISSOR:", "RG DO ALUNO:"],
     )
     if search_start < 0:
         return ""
-    limit = len(ident_lines) if zona_index < 0 else zona_index
+    limit = stop_index if stop_index is not None else (len(ident_lines) if zona_index < 0 else zona_index)
     for line in ident_lines[search_start + 1 : limit]:
         cleaned = cleanup_value(line)
+        if "TELEFONE" in fold_text(cleaned):
+            continue
         digits = re.sub(r"\D", "", cleaned)
         if len(digits) == 11:
             return cleaned
