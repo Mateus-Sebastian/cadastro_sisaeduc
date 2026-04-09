@@ -413,10 +413,12 @@ def normalize_phone(value: str) -> str:
         digits = digits[:3] + digits[4:]
     if len(digits) < 8:
         return ""
+    if len(digits) == 8:
+        digits = "839" + digits
+    elif len(digits) == 9:
+        digits = "83" + digits
     if len(digits) == 10:
         digits = digits[:2] + "9" + digits[2:]
-    if len(digits) in {8, 9}:
-        digits = "83" + digits
     if len(digits) != 11:
         return ""
     return f"({digits[:2]}) {digits[2:7]}-{digits[7:]}"
@@ -1305,7 +1307,7 @@ def extract_point_of_reference(paragraph_lines: list[str]) -> str:
 
 def collect_docx_files(input_dir: Path) -> list[Path]:
     files = []
-    for path in sorted(input_dir.glob("*.docx")):
+    for path in sorted(input_dir.rglob("*.docx")):
         if "FICHA EM BRANCO" in fold_text(path.name):
             continue
         files.append(path)
@@ -1317,8 +1319,14 @@ def parse_student_docx(docx_path: Path, base_dir: Path | None = None) -> dict[st
     paragraph_lines = iter_docx_paragraph_lines(docx_path)
     if not any(
         (
-            "EDUCAÇÃO INFANTIL - 2026" in line
+            "EDUCAÇÃO INFANTIL - 2024" in line
+            or "FUNDAMENTAL I - 2024" in line
+            or "FUNDAMENTAL II - 2024" in line
+            or "FUNDAMENTAL / ANOS INICIAIS - 2024" in line
+            or "EDUCAÇÃO INFANTIL - 2026" in line
             or "EDUCAÇÃO INFANTIL - 2025" in line
+            or "FUNDAMENTAL I - 2026" in line
+            or "FUNDAMENTAL I - 2025" in line
             or "FUNDAMENTAL II - 2026" in line
             or "FUNDAMENTAL II - 2025" in line
             or "FUNDAMENTAL / ANOS INICIAIS - 2026" in line
