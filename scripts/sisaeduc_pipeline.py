@@ -532,6 +532,10 @@ def normalize_grade(value: str) -> str:
         return "Creche 2"
     if folded.startswith("MATERNAL"):
         return "Creche 2"
+    if folded.startswith("PRE II"):
+        return "Pré escolar 2"
+    if folded.startswith("PRE I"):
+        return "Pré escolar 1"
     ano_match = re.fullmatch(r"([1-9])\s*(?:O)?\s*ANO", folded)
     if ano_match:
         return f"{ano_match.group(1)}º ano do ensino fundamental"
