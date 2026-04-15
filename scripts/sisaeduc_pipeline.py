@@ -1120,7 +1120,10 @@ def section_slice(lines: list[str], start_label: str, end_label: str | None) -> 
 
 
 def parse_person_block(lines: list[str], name_label: str, whatsapp_label: str | None = None) -> dict[str, str]:
-    name_index = find_index_prefix(lines, name_label)
+    name_label_variants = [name_label]
+    if name_label.endswith(":"):
+        name_label_variants.append(name_label.rstrip(":"))
+    name_index = find_any_index_prefix(lines, name_label_variants)
     if name_index < 0:
         return {
             "nome": "",
@@ -1141,7 +1144,7 @@ def parse_person_block(lines: list[str], name_label: str, whatsapp_label: str | 
     positions = {
         "nome": name_index,
         "municipio": find_index_prefix(lines, "MUNICÍPIO:", start=name_index),
-        "endereco": find_index_prefix(lines, "ENDEREÇO:", start=name_index),
+        "endereco": find_any_index_prefix(lines, ["ENDEREÇO:", "RUA:"], start=name_index),
         "uf": find_index_prefix(lines, "UF:", start=name_index),
         "telefone": find_any_index_prefix(lines, ["TELEFONE:", "TELEFONE", "WHATSAPP:"], start=name_index),
         "rg": find_index_prefix(lines, "RG:", start=name_index),
@@ -1155,7 +1158,10 @@ def parse_person_block(lines: list[str], name_label: str, whatsapp_label: str | 
     }
 
     if whatsapp_label:
-        positions["whatsapp"] = find_index_prefix(lines, whatsapp_label, start=name_index)
+        whatsapp_variants = [whatsapp_label]
+        if whatsapp_label.endswith(":"):
+            whatsapp_variants.append(whatsapp_label.rstrip(":"))
+        positions["whatsapp"] = find_any_index_prefix(lines, whatsapp_variants, start=name_index)
         positions["parentesco"] = find_index_prefix(lines, "GRAU DE PARENTESCO:", start=name_index)
         positions["email"] = find_index_prefix(lines, "E-MAIL:", start=name_index)
 
@@ -1323,6 +1329,7 @@ def parse_student_docx(docx_path: Path, base_dir: Path | None = None) -> dict[st
             or "FUNDAMENTAL I - 2024" in line
             or "FUNDAMENTAL II - 2024" in line
             or "FUNDAMENTAL / ANOS INICIAIS - 2024" in line
+            or "MATRÍCULA EJA - 2024" in line
             or "EDUCAÇÃO INFANTIL - 2026" in line
             or "EDUCAÇÃO INFANTIL - 2025" in line
             or "FUNDAMENTAL I - 2026" in line
@@ -1331,6 +1338,8 @@ def parse_student_docx(docx_path: Path, base_dir: Path | None = None) -> dict[st
             or "FUNDAMENTAL II - 2025" in line
             or "FUNDAMENTAL / ANOS INICIAIS - 2026" in line
             or "FUNDAMENTAL / ANOS INICIAIS - 2025" in line
+            or "MATRÍCULA EJA - 2026" in line
+            or "MATRÍCULA EJA - 2025" in line
         )
         for line in lines[:40]
     ):
@@ -1355,8 +1364,8 @@ def parse_student_docx(docx_path: Path, base_dir: Path | None = None) -> dict[st
     matricula_lines = section_slice(lines, "4 - DADOS DA MATRÍCULA DO ALUNO", "5 - DADOS COMPLEMENTARES DO ALUNO")
     comp_lines = section_slice(lines, "5 - DADOS COMPLEMENTARES DO ALUNO", None)
 
-    mae_start = find_index_prefix(ident_lines, "NOME DA MÃE:")
-    pai_start = find_index_prefix(ident_lines, "NOME DO PAI:")
+    mae_start = find_any_index_prefix(ident_lines, ["NOME DA MÃE:", "NOME DA MÃE"])
+    pai_start = find_any_index_prefix(ident_lines, ["NOME DO PAI:", "NOME DO PAI"])
     mae_lines = ident_lines[mae_start:pai_start] if mae_start >= 0 and pai_start >= 0 else []
     pai_lines = ident_lines[pai_start:] if pai_start >= 0 else []
 
